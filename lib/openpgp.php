@@ -123,18 +123,18 @@ class OpenPGP_S2K {
 
   static function parse(&$input) {
     $s2k = new OpenPGP_S2k();
-    switch($s2k->type = ord($input{0})) {
+    switch($s2k->type = ord($input[0])) {
       case 0:
-        $s2k->hash_algorithm = ord($input{1});
+        $s2k->hash_algorithm = ord($input[1]);
         $input = substr($input, 2);
         break;
       case 1:
-        $s2k->hash_algorithm = ord($input{1});
+        $s2k->hash_algorithm = ord($input[1]);
         $s2k->salt = substr($input, 2, 8);
         $input = substr($input, 10);
         break;
       case 3:
-        $s2k->hash_algorithm = ord($input{1});
+        $s2k->hash_algorithm = ord($input[1]);
         $s2k->salt = substr($input, 2, 8);
         $s2k->count = OpenPGP::decode_s2k_count(ord($input{10}));
         $input = substr($input, 11);
@@ -610,7 +610,7 @@ class OpenPGP_AsymmetricSessionKeyPacket extends OpenPGP_Packet {
         $rawkeyid = $this->read_bytes(8);
         $this->keyid = '';
         for($i = 0; $i < strlen($rawkeyid); $i++) { // Store KeyID in Hex
-          $this->keyid .= sprintf('%02X',ord($rawkeyid{$i}));
+          $this->keyid .= sprintf('%02X',ord($rawkeyid[$i]));
         }
 
         $this->key_algorithm = ord($this->read_byte());
@@ -626,7 +626,7 @@ class OpenPGP_AsymmetricSessionKeyPacket extends OpenPGP_Packet {
     $bytes = chr($this->version);
 
     for($i = 0; $i < strlen($this->keyid); $i += 2) {
-      $bytes .= chr(hexdec($this->keyid{$i}.$this->keyid{$i+1}));
+      $bytes .= chr(hexdec($this->keyid[$i].$this->keyid[$i+1]));
     }
 
     $bytes .= chr($this->key_algorithm);
@@ -692,7 +692,7 @@ class OpenPGP_SignaturePacket extends OpenPGP_Packet {
         $keyid = $this->read_bytes(8);
         $keyidHex = '';
         for($i = 0; $i < strlen($keyid); $i++) { // Store KeyID in Hex
-          $keyidHex .= sprintf('%02X',ord($keyid{$i}));
+          $keyidHex .= sprintf('%02X',ord($keyid[$i]));
         }
 
         $this->hashed_subpackets = array();
@@ -769,7 +769,7 @@ class OpenPGP_SignaturePacket extends OpenPGP_Packet {
         foreach((array)$this->unhashed_subpackets as $p) {
           if($p instanceof OpenPGP_SignaturePacket_IssuerPacket) {
             for($i = 0; $i < strlen($p->data); $i += 2) {
-              $body .= chr(hexdec($p->data{$i}.$p->data{$i+1}));
+              $body .= chr(hexdec($p->data[$i].$p->data[$i+1]));
             }
             break;
           }
@@ -976,8 +976,8 @@ class OpenPGP_SignaturePacket_ExportableCertificationPacket extends OpenPGP_Sign
 
 class OpenPGP_SignaturePacket_TrustSignaturePacket extends OpenPGP_SignaturePacket_Subpacket {
   function read() {
-    $this->depth = ord($this->input{0});
-    $this->trust = ord($this->input{1});
+    $this->depth = ord($this->input[0]);
+    $this->trust = ord($this->input[1]);
   }
 
   function body() {
@@ -1053,7 +1053,7 @@ class OpenPGP_SignaturePacket_RevocationKeyPacket extends OpenPGP_SignaturePacke
     $bytes .= chr($this->key_algorithm);
 
     for($i = 0; $i < strlen($this->fingerprint); $i += 2) {
-      $bytes .= chr(hexdec($this->fingerprint{$i}.$this->fingerprint{$i+1}));
+      $bytes .= chr(hexdec($this->fingerprint[$i].$this->fingerprint[$i+1]));
     }
 
     return $bytes;
@@ -1073,7 +1073,7 @@ class OpenPGP_SignaturePacket_IssuerPacket extends OpenPGP_SignaturePacket_Subpa
   function body() {
     $bytes = '';
     for($i = 0; $i < strlen($this->data); $i += 2) {
-      $bytes .= chr(hexdec($this->data{$i}.$this->data{$i+1}));
+      $bytes .= chr(hexdec($this->data[$i].$this->data[$i+1]));
     }
     return $bytes;
   }
@@ -1306,7 +1306,7 @@ class OpenPGP_OnePassSignaturePacket extends OpenPGP_Packet {
   function body() {
     $body = chr($this->version).chr($this->signature_type).chr($this->hash_algorithm).chr($this->key_algorithm);
     for($i = 0; $i < strlen($this->key_id); $i += 2) {
-      $body .= chr(hexdec($this->key_id{$i}.$this->key_id{$i+1}));
+      $body .= chr(hexdec($this->key_id[$i].$this->key_id[$i+1]));
     }
     $body .= chr((int)$this->nested);
     return $body;
