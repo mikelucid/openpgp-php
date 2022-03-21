@@ -1,11 +1,12 @@
 <?php
+namespace Sec\OpenPGP;
 // This is free and unencumbered software released into the public domain.
 /**
  * OpenPGP.php is a pure-PHP implementation of the OpenPGP Message Format
  * (RFC 4880).
  *
  * @package OpenPGP
- * @version 0.5.0
+ * @version 0.3.0
  * @author  Arto Bendiken <arto.bendiken@gmail.com>
  * @author  Stephen Paul Weber <singpolyma@singpolyma.net>
  * @see     http://github.com/bendiken/openpgp-php
@@ -18,8 +19,6 @@
  * @see http://tools.ietf.org/html/rfc4880
  */
 class OpenPGP {
-  const VERSION = array(0, 5, 0);
-
   /**
    * @see http://tools.ietf.org/html/rfc4880#section-6
    * @see http://tools.ietf.org/html/rfc4880#section-6.2
@@ -30,7 +29,7 @@ class OpenPGP {
     foreach ($headers as $key => $value) {
       $text .= $key . ': ' . (string)$value . "\n";
     }
-    $text .= "\n" . wordwrap(base64_encode($data), 76, "\n", true);
+    $text .= "\n" . base64_encode($data);
     $text .= "\n".'=' . base64_encode(substr(pack('N', self::crc24($data)), 1)) . "\n";
     $text .= self::footer($marker) . "\n";
     return $text;
@@ -44,13 +43,8 @@ class OpenPGP {
     $header = self::header($header);
     $text = str_replace(array("\r\n", "\r"), array("\n", ''), $text);
     if (($pos1 = strpos($text, $header)) !== FALSE &&
-        ($pos1 = strpos($text, "\n\n", $pos1 += strlen($header))) !== FALSE) {
-      $pos2 = strpos($text, "\n=", $pos1 += 2);
-      if ($pos2 === FALSE) {
-        trigger_error("Invalid ASCII armor, missing CRC");
-        $pos2 = strpos($text, "-----END");
-        if ($pos2 === FALSE) return NULL;
-      }
+        ($pos1 = strpos($text, "\n\n", $pos1 += strlen($header))) !== FALSE &&
+        ($pos2 = strpos($text, "\n=", $pos1 += 2)) !== FALSE) {
       return base64_decode($text = substr($text, $pos1, $pos2 - $pos1));
     }
   }
@@ -129,20 +123,20 @@ class OpenPGP_S2K {
 
   static function parse(&$input) {
     $s2k = new OpenPGP_S2k();
-    switch($s2k->type = ord($input[0])) {
+    switch($s2k->type = ord($input{0})) {
       case 0:
-        $s2k->hash_algorithm = ord($input[1]);
+        $s2k->hash_algorithm = ord($input{1});
         $input = substr($input, 2);
         break;
       case 1:
-        $s2k->hash_algorithm = ord($input[1]);
+        $s2k->hash_algorithm = ord($input{1});
         $s2k->salt = substr($input, 2, 8);
         $input = substr($input, 10);
         break;
       case 3:
-        $s2k->hash_algorithm = ord($input[1]);
+        $s2k->hash_algorithm = ord($input{1});
         $s2k->salt = substr($input, 2, 8);
-        $s2k->count = OpenPGP::decode_s2k_count(ord($input[10]));
+        $s2k->count = OpenPGP::decode_s2k_count(ord($input{10}));
         $input = substr($input, 11);
         break;
     }
@@ -157,12 +151,10 @@ class OpenPGP_S2K {
         $bytes .= chr($this->hash_algorithm);
         break;
       case 1:
-        if(strlen($this->salt) != 8) throw new Exception("Invalid salt length");
         $bytes .= chr($this->hash_algorithm);
         $bytes .= $this->salt;
         break;
       case 3:
-        if(strlen($this->salt) != 8) throw new Exception("Invalid salt length");
         $bytes .= chr($this->hash_algorithm);
         $bytes .= $this->salt;
         $bytes .= chr(OpenPGP::encode_s2k_count($this->count));
@@ -336,7 +328,7 @@ class OpenPGP_Message implements IteratorAggregate, ArrayAccess {
 
   /**
    * Function to extract verified signatures
-   * $verifiers is an array of callbacks formatted like array('RSA' => CALLBACK) or array('RSA' => array('SHA256' => CALLBACK)) that take two parameters: raw message and signature packet
+   * $verifiers is an array of callbacks formatted like array('RSA' => array('SHA256' => CALLBACK)) that take two parameters: raw message and signature packet
    */
   function verified_signatures($verifiers) {
     $signed = $this->signatures();
@@ -347,8 +339,7 @@ class OpenPGP_Message implements IteratorAggregate, ArrayAccess {
       $vsigs = array();
 
       foreach($signatures as $sig) {
-        $verifier = $verifiers[$sig->key_algorithm_name()];
-        if(is_array($verifier)) $verifier = $verifier[$sig->hash_algorithm_name()];
+        $verifier = $verifiers[$sig->key_algorithm_name()][$sig->hash_algorithm_name()];
         if($verifier && $this->verify_one($verifier, $sign, $sig)) {
           $vsigs[] = $sig;
         }
@@ -563,7 +554,7 @@ class OpenPGP_Packet {
   }
 
   function read_byte() {
-    return !is_null($bytes = $this->read_bytes()) ? $bytes[0] : NULL;
+    return ($bytes = $this->read_bytes()) ? $bytes[0] : NULL;
   }
 
   function read_bytes($count = 1) {
@@ -619,7 +610,7 @@ class OpenPGP_AsymmetricSessionKeyPacket extends OpenPGP_Packet {
         $rawkeyid = $this->read_bytes(8);
         $this->keyid = '';
         for($i = 0; $i < strlen($rawkeyid); $i++) { // Store KeyID in Hex
-          $this->keyid .= sprintf('%02X',ord($rawkeyid[$i]));
+          $this->keyid .= sprintf('%02X',ord($rawkeyid{$i}));
         }
 
         $this->key_algorithm = ord($this->read_byte());
@@ -635,7 +626,7 @@ class OpenPGP_AsymmetricSessionKeyPacket extends OpenPGP_Packet {
     $bytes = chr($this->version);
 
     for($i = 0; $i < strlen($this->keyid); $i += 2) {
-      $bytes .= chr(hexdec($this->keyid[$i].$this->keyid[$i+1]));
+      $bytes .= chr(hexdec($this->keyid{$i}.$this->keyid{$i+1}));
     }
 
     $bytes .= chr($this->key_algorithm);
@@ -695,15 +686,13 @@ class OpenPGP_SignaturePacket extends OpenPGP_Packet {
     switch($this->version = ord($this->read_byte())) {
       case 2:
       case 3:
-        if(ord($this->read_byte()) != 5) {
-          throw new Exception("Invalid version 2 or 3 SignaturePacket");
-        }
+        assert(ord($this->read_byte()) == 5);
         $this->signature_type = ord($this->read_byte());
         $creation_time = $this->read_timestamp();
         $keyid = $this->read_bytes(8);
         $keyidHex = '';
         for($i = 0; $i < strlen($keyid); $i++) { // Store KeyID in Hex
-          $keyidHex .= sprintf('%02X',ord($keyid[$i]));
+          $keyidHex .= sprintf('%02X',ord($keyid{$i}));
         }
 
         $this->hashed_subpackets = array();
@@ -780,7 +769,7 @@ class OpenPGP_SignaturePacket extends OpenPGP_Packet {
         foreach((array)$this->unhashed_subpackets as $p) {
           if($p instanceof OpenPGP_SignaturePacket_IssuerPacket) {
             for($i = 0; $i < strlen($p->data); $i += 2) {
-              $body .= chr(hexdec($p->data[$i].$p->data[$i+1]));
+              $body .= chr(hexdec($p->data{$i}.$p->data{$i+1}));
             }
             break;
           }
@@ -987,8 +976,8 @@ class OpenPGP_SignaturePacket_ExportableCertificationPacket extends OpenPGP_Sign
 
 class OpenPGP_SignaturePacket_TrustSignaturePacket extends OpenPGP_SignaturePacket_Subpacket {
   function read() {
-    $this->depth = ord($this->input[0]);
-    $this->trust = ord($this->input[1]);
+    $this->depth = ord($this->input{0});
+    $this->trust = ord($this->input{1});
   }
 
   function body() {
@@ -1064,7 +1053,7 @@ class OpenPGP_SignaturePacket_RevocationKeyPacket extends OpenPGP_SignaturePacke
     $bytes .= chr($this->key_algorithm);
 
     for($i = 0; $i < strlen($this->fingerprint); $i += 2) {
-      $bytes .= chr(hexdec($this->fingerprint[$i].$this->fingerprint[$i+1]));
+      $bytes .= chr(hexdec($this->fingerprint{$i}.$this->fingerprint{$i+1}));
     }
 
     return $bytes;
@@ -1084,7 +1073,7 @@ class OpenPGP_SignaturePacket_IssuerPacket extends OpenPGP_SignaturePacket_Subpa
   function body() {
     $bytes = '';
     for($i = 0; $i < strlen($this->data); $i += 2) {
-      $bytes .= chr(hexdec($this->data[$i].$this->data[$i+1]));
+      $bytes .= chr(hexdec($this->data{$i}.$this->data{$i+1}));
     }
     return $bytes;
   }
@@ -1317,7 +1306,7 @@ class OpenPGP_OnePassSignaturePacket extends OpenPGP_Packet {
   function body() {
     $body = chr($this->version).chr($this->signature_type).chr($this->hash_algorithm).chr($this->key_algorithm);
     for($i = 0; $i < strlen($this->key_id); $i += 2) {
-      $body .= chr(hexdec($this->key_id[$i].$this->key_id[$i+1]));
+      $body .= chr(hexdec($this->key_id{$i}.$this->key_id{$i+1}));
     }
     $body .= chr((int)$this->nested);
     return $body;
@@ -1424,14 +1413,7 @@ class OpenPGP_PublicKeyPacket extends OpenPGP_Packet {
    */
   function read_key_material() {
     foreach (self::$key_fields[$this->algorithm] as $field) {
-      if (strlen($field) == 1) {
-        $this->key[$field] = $this->read_mpi();
-      } else if ($field == 'oid') {
-        $len = ord($this->read_byte());
-        $this->key[$field] = $this->read_bytes($len);
-      } else {
-        $this->key[$field] = ord($this->read_byte());
-      }
+      $this->key[$field] = $this->read_mpi();
     }
     $this->key_id = substr($this->fingerprint(), -8);
   }
@@ -1441,8 +1423,8 @@ class OpenPGP_PublicKeyPacket extends OpenPGP_Packet {
       case 3:
         $material = array();
         foreach (self::$key_fields[$this->algorithm] as $i) {
-            $material[] = pack('n', OpenPGP::bitlength($this->key[$i]));
-            $material[] = $this->key[$i];
+          $material[] = pack('n', OpenPGP::bitlength($this->key[$i]));
+          $material[] = $this->key[$i];
         }
         return $material;
       case 4:
@@ -1453,15 +1435,8 @@ class OpenPGP_PublicKeyPacket extends OpenPGP_Packet {
         );
         $material = array();
         foreach (self::$key_fields[$this->algorithm] as $i) {
-          if (strlen($i) == 1) {
-            $material[] = pack('n', OpenPGP::bitlength($this->key[$i]));
-            $material[] = $this->key[$i];
-          } else if ($i == 'oid') {
-            $material[] = chr(strlen($this->key[$i]));
-            $material[] = $this->key[$i];
-          } else {
-            $material[] = chr($this->key[$i]);
-          }
+          $material[] = pack('n', OpenPGP::bitlength($this->key[$i]));
+          $material[] = $this->key[$i];
         }
         $material = implode('', $material);
         $head[1] = pack('n', 6 + strlen($material));
@@ -1499,12 +1474,9 @@ class OpenPGP_PublicKeyPacket extends OpenPGP_Packet {
   }
 
   static $key_fields = array(
-     1 => array('n', 'e'),
-    16 => array('p', 'g', 'y'),
-    17 => array('p', 'q', 'g', 'y'),
-    18 => array('oid', 'p', 'len', 'future', 'hash', 'algorithm'),
-    19 => array('oid', 'p'),
-    22 => array('oid', 'p')
+     1 => array('n', 'e'),           // RSA
+    16 => array('p', 'g', 'y'),      // ELG-E
+    17 => array('p', 'q', 'g', 'y'), // DSA
   );
 
   static $algorithms = array(
@@ -1515,8 +1487,7 @@ class OpenPGP_PublicKeyPacket extends OpenPGP_Packet {
       17 => 'DSA',
       18 => 'ECC',
       19 => 'ECDSA',
-      21 => 'DH',
-      22 => 'EdDSA'
+      21 => 'DH'
     );
 
 }
@@ -1566,9 +1537,6 @@ class OpenPGP_SecretKeyPacket extends OpenPGP_PublicKeyPacket {
      3 => array('d', 'p', 'q', 'u'), // RSA-S
     16 => array('x'),                // ELG-E
     17 => array('x'),                // DSA
-    18 => array('x'),                // ECDH
-    19 => array('x'),                // ECDSA
-    22 => array('x'),                // EdDSA
   );
 
   function key_from_input() {
@@ -1627,13 +1595,6 @@ class OpenPGP_CompressedDataPacket extends OpenPGP_Packet implements IteratorAgg
   public $algorithm;
   /* see http://tools.ietf.org/html/rfc4880#section-9.3 */
   static $algorithms = array(0 => 'Uncompressed', 1 => 'ZIP', 2 => 'ZLIB', 3 => 'BZip2');
-
-  function __construct($m=NULL, $algorithm=1) {
-    parent::__construct();
-    $this->algorithm = $algorithm;
-    $this->data = $m ? $m : new OpenPGP_Message();
-  }
-
   function read() {
     $this->algorithm = ord($this->read_byte());
     $this->data = $this->read_bytes($this->length);
